@@ -33,6 +33,10 @@ import           Data.Functor.Identity (Identity)
 import           Data.Monoid (Monoid, mempty)
 import           GHC.Conc.Sync (STM)
 
+--------------------------------------------------------------------------------
+-- * MonadBaseControl
+--------------------------------------------------------------------------------
+
 class (Monad m, Monad b) => MonadBaseControl b m | m -> b where
     -- | Monadic state of @m@.
     data StM m a :: *
@@ -45,7 +49,8 @@ class (Monad m, Monad b) => MonadBaseControl b m | m -> b where
     --
     -- @liftBaseWith . const . return = return@
     --
-    -- @liftBaseWith (const (m >>= f)) = liftBaseWith (const m) >>= liftBaseWith . const . f@
+    -- @liftBaseWith (const (m >>= f)) =
+    --      liftBaseWith (const m) >>= liftBaseWith . const . f@
     --
     -- The difference with 'liftBase' is that before lifting the base
     -- computation @liftBaseWith@ captures the state of @m@. It then provides
@@ -61,12 +66,12 @@ class (Monad m, Monad b) => MonadBaseControl b m | m -> b where
     -- @liftBaseWith (\\runInBase -> runInBase m) >>= restoreM = m@
     restoreM :: StM m a -> m a
 
-#define BASE(M, ST)               \
-instance MonadBaseControl M M where {     \
-    newtype StM M a = ST a;               \
-    liftBaseWith f = f $ liftM ST;        \
-    restoreM (ST x) = return x;           \
-    {-# INLINE liftBaseWith #-};          \
+#define BASE(M, ST)                   \
+instance MonadBaseControl M M where { \
+    newtype StM M a = ST a;           \
+    liftBaseWith f = f $ liftM ST;    \
+    restoreM (ST x) = return x;       \
+    {-# INLINE liftBaseWith #-};      \
     {-# INLINE restoreM #-}}
 
 BASE(IO,            StIO)
@@ -81,8 +86,8 @@ BASE(       (ST s), StST)
 
 #undef BASE
 
--- | Default implementation of 'liftBaseWith'.  Below is a prototypical instance
---   for 'MonadBaseControl' for 'StateT':
+-- | Default implementation of 'liftBaseWith'.  Below is a prototypical
+--   instance for 'MonadBaseControl' for 'StateT':
 --
 -- @
 --instance MonadBaseControl b m => MonadBaseControl b (StateT s m) where
