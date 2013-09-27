@@ -3,7 +3,7 @@
 
 name:                monad-base-control
 version:             0.1.0.0
-synopsis:            A rewrite of cmonad-control
+synopsis:            A rewrite of monad-control
 -- description:         
 homepage:            http://github.com/fpco/monad-base-control
 license:             BSD3

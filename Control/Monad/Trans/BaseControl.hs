@@ -7,7 +7,7 @@
 
 module Control.Monad.Trans.BaseControl
     ( -- * MonadBaseControl
-      MonadBaseControl (..)
+      MonadBaseControl (..), defaultLiftBaseWith
       -- * Utility functions
     , control, liftBaseOp, liftBaseOp_, liftBaseDiscard
     ) where
@@ -34,8 +34,31 @@ import           Data.Monoid (Monoid, mempty)
 import           GHC.Conc.Sync (STM)
 
 class (Monad m, Monad b) => MonadBaseControl b m | m -> b where
+    -- | Monadic state of @m@.
     data StM m a :: *
+
+    -- | @liftBaseWith@ is similar to 'liftIO' and 'liftBase' in that it
+    -- lifts a base computation to the constructed monad.
+    --
+    -- Instances should satisfy similar laws as the 'MonadIO' and 'MonadBase'
+    -- laws:
+    --
+    -- @liftBaseWith . const . return = return@
+    --
+    -- @liftBaseWith (const (m >>= f)) = liftBaseWith (const m) >>= liftBaseWith . const . f@
+    --
+    -- The difference with 'liftBase' is that before lifting the base
+    -- computation @liftBaseWith@ captures the state of @m@. It then provides
+    -- the base computation with a 'RunInBase' function that allows running
+    -- @m@ computations in the base monad on the captured state.
     liftBaseWith :: ((m x -> b (StM m x)) -> b a) -> m a
+
+    -- | Construct a @m@ computation from the monadic state of @m@ that is
+    -- returned from a 'RunInBase' function.
+    --
+    -- Instances should satisfy:
+    --
+    -- @liftBaseWith (\\runInBase -> runInBase m) >>= restoreM = m@
     restoreM :: StM m a -> m a
 
 #define BASE(M, ST)               \
@@ -58,12 +81,31 @@ BASE(       (ST s), StST)
 
 #undef BASE
 
+-- | Default implementation of 'liftBaseWith'.  Below is a prototypical instance
+--   for 'MonadBaseControl' for 'StateT':
+--
+-- @
+--instance MonadBaseControl b m => MonadBaseControl b (StateT s m) where
+--    newtype StM (StateT s m) a = StateST (StM m (a, s))
+--    liftBaseWith f = StateT $ \\s ->
+--        defaultLiftBaseWith (,s) (`runStateT` s) StateST f
+--    restoreM (StateST m) = StateT . const . restoreM $ m
+-- @
+defaultLiftBaseWith
+    :: MonadBaseControl b m
+    => (z -> r)                   -- ^ Transform returned state value
+    -> (t -> m x)                 -- ^ Run the monad transformer
+    -> (StM m x -> y)             -- ^ Constructor for instance's StM
+    -> ((t -> b y) -> b z)         -- ^ Passed through from liftBaseWith
+    -> m r
+defaultLiftBaseWith g h u f =
+    liftM g $ liftBaseWith $ \runInBase -> f $ \k ->
+        liftM u $ runInBase $ h k
+
 #define TRANS(CTX, M, C1, C2, R, ST, TY, F)                             \
 instance (MonadBaseControl b m, CTX) => MonadBaseControl b (M m) where { \
     newtype StM (M m) a = ST (StM m TY);                                \
-    liftBaseWith f = C1                                                 \
-        liftM F $ liftBaseWith $ \runInBase -> f $ \k ->                  \
-            liftM ST $ runInBase $ R k;                                 \
+    liftBaseWith f  = C1 defaultLiftBaseWith F R ST f;                  \
     restoreM (ST m) = C2 . restoreM $ m;                                \
     {-# INLINE liftBaseWith #-};                                        \
     {-# INLINE restoreM #-}}
@@ -87,10 +129,10 @@ TRANS(Monad m, Strict.StateT s, Strict.StateT $ \s ->, Strict.StateT . const,
 TRANS(Monad m, ReaderT r, ReaderT $ \r ->, ReaderT . const,
       (`runReaderT` r), ReaderTStM, a, id)
 TRANS(Monoid w, RWST r w s, RWST $ \r s ->, RWST . const . const,
-      flip (`runRWST` r) s, RWSTStM, (a, s ,w), (\x -> (x,s,mempty)))
+      (flip (`runRWST` r) s), RWSTStM, (a, s ,w), (\x -> (x,s,mempty)))
 TRANS(Monoid w, Strict.RWST r w s, Strict.RWST $ \r s ->,
       Strict.RWST . const . const,
-      flip (`Strict.runRWST` r) s, StRWSTStM, (a, s ,w),
+      (flip (`Strict.runRWST` r) s), StRWSTStM, (a, s, w),
       (\x -> (x,s,mempty)))
 
 #undef TRANS
