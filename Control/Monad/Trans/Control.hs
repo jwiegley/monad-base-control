@@ -19,8 +19,10 @@ module Control.Monad.Trans.Control
 
       -- * MonadBaseControl
       MonadBaseControl (..), defaultLiftBaseWith
+
       -- * MonadBaseControl
     , MonadTransControl (..), defaultLiftWith
+
       -- * Utility functions
     , control, liftBaseOp, liftBaseOp_, liftBaseDiscard
     ) where
@@ -347,7 +349,7 @@ defaultLiftWith f h u g = liftM g $ f $ liftM u . h
 {-# INLINE defaultLiftWith #-}
 
 --------------------------------------------------------------------------------
--- * Instances
+-- * Base Instances
 --------------------------------------------------------------------------------
 
 instance MonadBaseControl IO IO where
@@ -413,6 +415,12 @@ instance MonadBaseControl (ST s) (ST s) where
      {-# INLINE liftBaseWith #-}
      {-# INLINE restoreM #-}
 
+--------------------------------------------------------------------------------
+-- * Transformer Instances
+--------------------------------------------------------------------------------
+
+-- ListT
+
 instance MonadBaseControl b m => MonadBaseControl b (ListT m) where
     newtype StM (ListT m) a = ListTStM (StM m [a])
     liftBaseWith f = ListT $ defaultLiftBaseWith f runListT ListTStM return
@@ -427,6 +435,8 @@ instance  MonadTransControl (ListT) where
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
 
+-- MaybeT
+
 instance MonadBaseControl b m => MonadBaseControl b (MaybeT m) where
     newtype StM (MaybeT m) a = MaybeTStM (StM m (Maybe a))
     liftBaseWith f = MaybeT $ defaultLiftBaseWith f runMaybeT MaybeTStM return
@@ -440,6 +450,8 @@ instance  MonadTransControl (MaybeT) where
     restoreT = MaybeT . return . unMaybeTStT
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
+
+-- IdentityT
 
 instance MonadBaseControl b m
          => MonadBaseControl b (IdentityT m) where
@@ -456,6 +468,8 @@ instance  MonadTransControl (IdentityT) where
     restoreT = IdentityT . return . unIdentityTStT
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
+
+-- WriterT
 
 instance (MonadBaseControl b m, Monoid w)
          => MonadBaseControl b (WriterT w m) where
@@ -491,6 +505,8 @@ instance Monoid w => MonadTransControl (Strict.WriterT w) where
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
 
+-- ErrorT
+
 instance (MonadBaseControl b m, Error e)
          => MonadBaseControl b (ErrorT e m) where
     newtype StM (ErrorT e m) a = ErrorTStM (StM m (Either e a))
@@ -505,6 +521,8 @@ instance Error e => MonadTransControl (ErrorT e) where
     restoreT = ErrorT . return . unErrorTStT
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
+
+-- StateT
 
 instance MonadBaseControl b m => MonadBaseControl b (StateT s m) where
     newtype StM (StateT s m) a = StateTStM (StM m (a, s))
@@ -538,6 +556,8 @@ instance MonadTransControl (Strict.StateT s) where
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
 
+-- ReaderT
+
 instance MonadBaseControl b m => MonadBaseControl b (ReaderT r m) where
     newtype StM (ReaderT r m) a = ReaderTStM (StM m a)
     liftBaseWith f = ReaderT $ \r ->
@@ -553,6 +573,8 @@ instance MonadTransControl (ReaderT r) where
     restoreT = ReaderT . const . return . unReaderTStT
     {-# INLINE liftWith #-}
     {-# INLINE restoreT #-}
+
+-- RWST
 
 instance (MonadBaseControl b m, Monoid w)
          => MonadBaseControl b (RWST r w s m) where
