@@ -1,3 +1,4 @@
+{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -93,24 +94,24 @@ BASE(       (ST s), StST)
 --instance MonadBaseControl b m => MonadBaseControl b (StateT s m) where
 --    newtype StM (StateT s m) a = StateST (StM m (a, s))
 --    liftBaseWith f = StateT $ \\s ->
---        defaultLiftBaseWith (,s) (`runStateT` s) StateST f
+--        defaultLiftBaseWith  f (`runStateT` s) StateST (,s)
 --    restoreM (StateST m) = StateT . const . restoreM $ m
 -- @
 defaultLiftBaseWith
     :: MonadBaseControl b m
-    => (z -> r)                   -- ^ Transform returned state value
-    -> (t -> m x)                 -- ^ Run the monad transformer
-    -> (StM m x -> y)             -- ^ Constructor for instance's StM
-    -> ((t -> b y) -> b z)         -- ^ Passed through from liftBaseWith
+    => ((t m x -> b (StM (t m) x)) -> b s) -- ^ Passed through from liftBaseWith
+    -> (t m x -> m a)                     -- ^ Run the monad transformer
+    -> (StM m a -> StM (t m) x)           -- ^ Constructor for instance's StM
+    -> (s -> r)                           -- ^ Transform returned state value
     -> m r
-defaultLiftBaseWith g h u f =
+defaultLiftBaseWith f h u g =
     liftM g $ liftBaseWith $ \runInBase -> f $ \k ->
         liftM u $ runInBase $ h k
 
 #define TRANS(CTX, M, C1, C2, R, ST, TY, F)                             \
 instance (MonadBaseControl b m, CTX) => MonadBaseControl b (M m) where { \
     newtype StM (M m) a = ST (StM m TY);                                \
-    liftBaseWith f  = C1 defaultLiftBaseWith F R ST f;                  \
+    liftBaseWith f  = C1 defaultLiftBaseWith f R ST F;                  \
     restoreM (ST m) = C2 . restoreM $ m;                                \
     {-# INLINE liftBaseWith #-};                                        \
     {-# INLINE restoreM #-}}
